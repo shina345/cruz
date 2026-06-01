@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cruzBlack: #121212;
+  --color-cruzGrey: #EFEFEF;
+  --color-cruzGold: #C5A059;
+  --color-cruzBg: #F8F7F4;
+  --color-cruzBorder: #E8E6E1;
+
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: "Playfair Display", "Times New Roman", serif;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--color-cruzBg);
+    color: var(--color-cruzBlack);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide scrollbar for nav */
+nav::-webkit-scrollbar {
+    display: none;
+}
+nav {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Header transition on scroll */
+#main-header.scrolled {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    border-bottom-color: var(--color-cruzBorder);
+}
+#main-header.scrolled h1 {
+    font-size: 2rem;
+    transition: font-size 0.3s ease;
+}
+
+/* Base fade up state for GSAP */
+.fade-in-up {
+    opacity: 0;
+    transform: translateY(30px);
+}
+
+/* Track Marquee Animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 12s linear infinite;
+}
+
+/* Perspective Utilities for 3D Showroom */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.perspective-2000 {
+  perspective: 2000px;
+}
+.rotate-y-6 {
+  transform: rotateY(6deg);
+}
+
+/* Cinematic Upgrades */
+.film-grain {
+  position: fixed;
+  top: -100%;
+  left: -100%;
+  right: -100%;
+  bottom: -100%;
+  width: 300%;
+  height: 300%;
+  background: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+  opacity: 0.035;
+  pointer-events: none;
+  z-index: 9999;
+  animation: grain 12s steps(10) infinite;
+}
+
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  20% { transform: translate(-15%, 5%); }
+  30% { transform: translate(7%, -25%); }
+  40% { transform: translate(-5%, 25%); }
+  50% { transform: translate(-15%, 10%); }
+  60% { transform: translate(15%, 0%); }
+  70% { transform: translate(0%, 15%); }
+  85% { transform: translate(3%, 35%); }
+  95% { transform: translate(-10%, 10%); }
+}
+
+.ken-burns {
+  animation: kenburns 35s ease-in-out infinite alternate;
+}
+
+@keyframes kenburns {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.08) translate(-1%, -0.5%); }
+  100% { transform: scale(1.15) translate(1%, 0.5%); }
+}
+
+.cinematic-hud {
+  font-family: monospace, Courier, monospace;
+}
+
+@keyframes rec-blink {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+.animate-rec-blink {
+  animation: rec-blink 1.5s infinite;
+}
+
+.reveal-mask {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+
+
