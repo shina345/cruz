@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import DigitalTailoring from "@/components/DigitalTailoring";
 import SafeVideo from "@/components/SafeVideo";
 import { useSiteConfig } from "@/hooks/useSiteConfig";
+import ThreePreloader from "@/components/ThreePreloader";
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(true);
   const [heroVideoUrl] = useSiteConfig("heroVideoUrl", "https://player.vimeo.com/external/498425268.hd.mp4?s=d7e366ff42c1613ebbe6a894a7cb2eddbf8e353f&profile_id=175");
   const [heroImageUrl] = useSiteConfig("heroImageUrl", "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=2000&auto=format&fit=crop");
   const [heroMediaType] = useSiteConfig("heroMediaType", "video");
@@ -18,6 +20,16 @@ export default function Home() {
   const [homeCampaignUrl] = useSiteConfig("homeCampaignUrl", "https://images.unsplash.com/photo-1532453288672-3a27e9be9efd?q=80&w=2000&auto=format&fit=crop");
   const [searchLook1Url] = useSiteConfig("searchLook1Url", "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=600&auto=format&fit=crop");
   const [searchLook2Url] = useSiteConfig("searchLook2Url", "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=600&auto=format&fit=crop");
+
+  useEffect(() => {
+    if (!isLoading) {
+      gsap.fromTo(
+        ".hero-fade-in",
+        { y: 30, opacity: 0 },
+        { y: 0, opacity: 1, duration: 1.5, stagger: 0.2, ease: "power3.out" }
+      );
+    }
+  }, [isLoading]);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -146,9 +158,9 @@ export default function Home() {
         
         <div className="absolute inset-0 bg-black/35 z-0"></div>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white p-4 z-10">
-          <h2 className="text-[9px] sm:text-[10px] tracking-[0.3em] sm:tracking-[0.4em] uppercase mb-3 sm:mb-4 opacity-80">Fall / Winter 2026</h2>
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-serif tracking-wide mb-6 sm:mb-8 font-light leading-tight">{heroTitle}</h1>
-          <a href="#" className="border border-white px-7 sm:px-10 py-3 text-[9px] tracking-[0.2em] uppercase hover:bg-white hover:text-black transition-all duration-300">View The Lookbook</a>
+          <h2 className="text-[9px] sm:text-[10px] tracking-[0.3em] sm:tracking-[0.4em] uppercase mb-3 sm:mb-4 opacity-0 hero-fade-in">Fall / Winter 2026</h2>
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-serif tracking-wide mb-6 sm:mb-8 font-light leading-tight opacity-0 hero-fade-in">{heroTitle}</h1>
+          <a href="#" className="border border-white px-7 sm:px-10 py-3 text-[9px] tracking-[0.2em] uppercase hover:bg-white hover:text-black transition-all duration-300 opacity-0 hero-fade-in">View The Lookbook</a>
         </div>
       </section>
 
@@ -250,6 +262,7 @@ export default function Home() {
           <h3 className="text-xl sm:text-3xl font-serif font-light">Structure &amp; Flow</h3>
         </div>
       </section>
+      {isLoading && <ThreePreloader onComplete={() => setIsLoading(false)} />}
     </main>
   );
 }
