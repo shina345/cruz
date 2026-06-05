@@ -27,7 +27,7 @@ export default function ThreePreloader({ onComplete }: ThreePreloaderProps) {
     const height = canvasRef.current.clientHeight;
     
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.z = 8;
+    camera.position.z = 5.5;
 
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
@@ -43,17 +43,17 @@ export default function ThreePreloader({ onComplete }: ThreePreloaderProps) {
     scene.add(ambientLight);
 
     // Warm main key light
-    const keyLight = new THREE.DirectionalLight(0xd4af37, 2.5);
+    const keyLight = new THREE.DirectionalLight(0xd4af37, 4.0);
     keyLight.position.set(5, 5, 4);
     scene.add(keyLight);
 
     // Cool rim light from behind/left for high-fashion studio look
-    const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 3.0);
     rimLight.position.set(-5, 3, -2);
     scene.add(rimLight);
 
     // Dynamic point light that follows the mouse
-    const pointLight = new THREE.PointLight(0xffffffff, 3, 15);
+    const pointLight = new THREE.PointLight(0xffffffff, 4, 15);
     pointLight.position.set(0, 0, 3);
     scene.add(pointLight);
 
@@ -191,7 +191,7 @@ export default function ThreePreloader({ onComplete }: ThreePreloaderProps) {
 
       // Smooth progress update
       if (currentProgress < 1) {
-        currentProgress += 0.006; // Adjust speed of loader simulation
+        currentProgress += 0.024; // Adjust speed of loader simulation (faster)
         if (currentProgress > 1) currentProgress = 1;
         setProgress(Math.floor(currentProgress * 100));
       }
@@ -324,10 +324,7 @@ export default function ThreePreloader({ onComplete }: ThreePreloaderProps) {
 
       {/* Loading Progress Interface */}
       <div className="w-full max-w-sm px-8 flex flex-col items-center space-y-4">
-        {/* Progress Percentage */}
-        <div className="preloader-hud font-serif italic text-4xl sm:text-5xl text-white tracking-widest text-center">
-          {progress.toString().padStart(3, "0")}%
-        </div>
+
 
         {/* Minimalist Progress Bar */}
         <div className="preloader-hud w-full h-[1px] bg-white/10 relative overflow-hidden">
