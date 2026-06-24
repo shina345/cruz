@@ -12,45 +12,52 @@ export interface ServerGarment {
   createdAt: string;
 }
 
+const STORAGE_KEY = "cruz_garments";
+
+/** Read all garments from localStorage */
+export function readLocalGarments(): ServerGarment[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Write garments array to localStorage */
+export function writeLocalGarments(garments: ServerGarment[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(garments));
+}
+
 /**
- * Fetches garments from the server-side JSON store.
+ * Hook that reads garments from localStorage and re-renders on updates.
  * Pass a category string to filter, or omit for all garments.
- * Automatically re-fetches when `refreshKey` changes.
  */
 export function useServerGarments(category?: string) {
   const [garments, setGarments] = useState<ServerGarment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
-    let cancelled = false;
     setLoading(true);
-    setError(null);
-
-    const url = category
-      ? `/api/garments?category=${encodeURIComponent(category)}`
-      : "/api/garments";
-
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data: ServerGarment[]) => {
-        if (!cancelled) setGarments(data);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
+    const all = readLocalGarments();
+    const filtered = category ? all.filter((g) => g.category === category) : all;
+    setGarments(filtered);
+    setLoading(false);
   }, [category, refreshKey]);
 
-  return { garments, loading, error, refresh };
+  // Also re-load when the custom storage event fires
+  useEffect(() => {
+    const handler = () => {
+      const all = readLocalGarments();
+      const filtered = category ? all.filter((g) => g.category === category) : all;
+      setGarments(filtered);
+    };
+    window.addEventListener("cruz_garments_updated", handler);
+    return () => window.removeEventListener("cruz_garments_updated", handler);
+  }, [category]);
+
+  return { garments, loading, error: null, refresh };
 }

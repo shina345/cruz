@@ -66,6 +66,15 @@ const DEFAULTS = {
   searchLook2Url: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=600&auto=format&fit=crop",
 };
 
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [passcode, setPasscode] = useState("");
@@ -292,7 +301,20 @@ export default function AdminPage() {
     showNotification("success", `"${newItem.title}" added to Archive under ${category.toUpperCase()}.`);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    const target = uploadedItems.find((item) => item.id === id);
+    if (target && target.img?.startsWith("/uploads/")) {
+      try {
+        await fetch("/api/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: target.img }),
+        });
+      } catch (err) {
+        console.error("Failed to delete file from server", err);
+      }
+    }
+
     const updated = uploadedItems.filter((item) => item.id !== id);
     localStorage.setItem("cruz_uploaded_items", JSON.stringify(updated));
     setUploadedItems(updated);
@@ -321,8 +343,16 @@ export default function AdminPage() {
 
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       if (!res.ok) {
-        const err = await res.json();
-        showNotification("error", err.error || "Upload failed.");
+        // Fallback to client-side Base64 storage on server write failure (like Vercel)
+        if (file.size > 3 * 1024 * 1024) {
+          showNotification("error", "Local fallback size limit exceeded (max 3MB).");
+          return;
+        }
+        const base64Url = await fileToBase64(file);
+        localStorage.setItem(`cruz_config_${configKey}`, base64Url);
+        window.dispatchEvent(new Event("storage_cruz_config"));
+        updateStateField(configKey, base64Url);
+        showNotification("success", "Layout updated (saved in browser storage; server is read-only).");
         return;
       }
 
@@ -334,7 +364,20 @@ export default function AdminPage() {
       showNotification("success", "Image uploaded — now visible to all visitors.");
     } catch (err) {
       console.error(err);
-      showNotification("error", "Network error. Upload failed.");
+      // Fallback on network error
+      try {
+        if (file.size > 3 * 1024 * 1024) {
+          showNotification("error", "Local fallback size limit exceeded (max 3MB).");
+          return;
+        }
+        const base64Url = await fileToBase64(file);
+        localStorage.setItem(`cruz_config_${configKey}`, base64Url);
+        window.dispatchEvent(new Event("storage_cruz_config"));
+        updateStateField(configKey, base64Url);
+        showNotification("success", "Layout updated (saved in browser storage).");
+      } catch {
+        showNotification("error", "Network error. Upload failed.");
+      }
     }
 
     // Reset the file input so the same file can be re-selected if needed
@@ -349,7 +392,20 @@ export default function AdminPage() {
   };
 
   // Clear specific configuration override
-  const handleRemoveSingleConfig = (key: string) => {
+  const handleRemoveSingleConfig = async (key: string) => {
+    const val = localStorage.getItem(`cruz_config_${key}`);
+    if (val && val.startsWith("/uploads/")) {
+      try {
+        await fetch("/api/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: val }),
+        });
+      } catch (err) {
+        console.error("Failed to delete file from server", err);
+      }
+    }
+
     localStorage.removeItem(`cruz_config_${key}`);
     window.dispatchEvent(new Event("storage_cruz_config"));
     loadConfigStates();
@@ -357,8 +413,22 @@ export default function AdminPage() {
   };
 
   // Clear all overrides and restore default presets
-  const handleRestoreDefaults = () => {
-    Object.keys(DEFAULTS).forEach((k) => localStorage.removeItem(`cruz_config_${k}`));
+  const handleRestoreDefaults = async () => {
+    for (const k of Object.keys(DEFAULTS)) {
+      const val = localStorage.getItem(`cruz_config_${k}`);
+      if (val && val.startsWith("/uploads/")) {
+        try {
+          await fetch("/api/upload", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: val }),
+          });
+        } catch (err) {
+          console.error("Failed to delete file from server", err);
+        }
+      }
+      localStorage.removeItem(`cruz_config_${k}`);
+    }
     window.dispatchEvent(new Event("storage_cruz_config"));
     loadConfigStates();
     showNotification("success", "Original designer layouts and presets restored.");
@@ -394,18 +464,41 @@ export default function AdminPage() {
     window.dispatchEvent(new Event("cruz_collections_updated"));
   };
 
-  // Remove image from an uploaded item (sets img to empty string)
-  const removeImage = (itemId: string) => {
-    const updated = uploadedItems.map((item) => {
-      if (item.id === itemId) {
-        return { ...item, img: "" };
+  // Permanently delete a custom silhouette item from the archive
+  const removeImage = async (itemId: string) => {
+    const target = uploadedItems.find((item) => item.id === itemId);
+    if (target && target.img?.startsWith("/uploads/")) {
+      try {
+        await fetch("/api/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: target.img }),
+        });
+      } catch (err) {
+        console.error("Failed to delete file from server", err);
       }
-      return item;
-    });
+    }
+
+    const updated = uploadedItems.filter((item) => item.id !== itemId);
     setUploadedItems(updated);
     localStorage.setItem("cruz_uploaded_items", JSON.stringify(updated));
+
+    // Also clean up from OOS list if present
+    if (outOfStockIds.includes(itemId)) {
+      const updatedOos = outOfStockIds.filter((id) => id !== itemId);
+      setOutOfStockIds(updatedOos);
+      localStorage.setItem("cruz_out_of_stock_items", JSON.stringify(updatedOos));
+    }
+
+    // Also clean up from deleted list if present
+    if (deletedIds.includes(itemId)) {
+      const updatedDeleted = deletedIds.filter((id) => id !== itemId);
+      setDeletedIds(updatedDeleted);
+      localStorage.setItem("cruz_deleted_items", JSON.stringify(updatedDeleted));
+    }
+
     window.dispatchEvent(new Event("cruz_collections_updated"));
-    showNotification("success", "Image removed from item.");
+    showNotification("success", "Item permanently deleted from archive.");
   };
 
   // Toggle inquiry pending vs contacted
@@ -513,14 +606,16 @@ export default function AdminPage() {
     }, 4000);
   };
 
-  // Reusable render helper for customizable layout settings
+  // Reusable render helper for customizable layout settings.
+  // hasCustom is derived from the reactive `currentValue` state — not a cold
+  // localStorage.getItem — so the Remove button appears immediately after upload.
   const renderMediaCard = (
     label: string,
     configKey: keyof typeof DEFAULTS,
     currentValue: string,
     isImage: boolean = true
   ) => {
-    const hasCustom = typeof window !== "undefined" && !!localStorage.getItem(`cruz_config_${configKey}`);
+    const hasCustom = currentValue !== DEFAULTS[configKey];
     return (
       <div key={configKey} className="group border border-cruzBorder/40 bg-white/40 p-5 transition-all duration-300 hover:border-cruzBlack/30 relative flex flex-col justify-between">
         <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-cruzBlack/20 group-hover:border-cruzBlack/50"></div>
@@ -540,7 +635,11 @@ export default function AdminPage() {
 
           {isImage ? (
             <div className="aspect-[16/9] w-full bg-cruzGrey border border-cruzBorder/30 mb-4 overflow-hidden relative flex items-center justify-center p-1">
-              <img src={currentValue} alt={label} className="max-h-full max-w-full object-contain" />
+              {currentValue ? (
+                <img src={currentValue} alt={label} className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="text-[9px] font-mono text-gray-300 uppercase tracking-widest">No Image Set</span>
+              )}
             </div>
           ) : (
             <div className="aspect-[16/9] w-full bg-cruzGrey border border-cruzBorder/30 mb-4 overflow-hidden relative flex flex-col items-center justify-center p-4">
@@ -566,7 +665,7 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => handleRemoveSingleConfig(configKey)}
-                className="border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 text-[8px] tracking-widest font-mono uppercase px-3 py-2 transition-all animate-fade-in"
+                className="border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 text-[8px] tracking-widest font-mono uppercase px-3 py-2 transition-all"
               >
                 Remove
               </button>
@@ -740,8 +839,28 @@ export default function AdminPage() {
                         if (!gFile && gImgUrl.trim()) fd.append("imgUrl", gImgUrl.trim());
                         const res = await fetch("/api/garments", { method: "POST", body: fd });
                         if (!res.ok) {
-                          const err = await res.json();
-                          showNotification("error", err.error || "Upload failed.");
+                          // Try local storage fallback (e.g., Vercel read-only filesystem)
+                          if (gFile && gFile.size > 3 * 1024 * 1024) {
+                            showNotification("error", "File too large for local fallback (max 3MB).");
+                            return;
+                          }
+                          const img = gFile ? await fileToBase64(gFile) : gImgUrl.trim();
+                          const lookLabel = gLook.trim() || `Look ${Date.now().toString().slice(-2)}`;
+                          const newItem: UploadedItem = {
+                            id: `uploaded-${Date.now()}`,
+                            title: gTitle.trim(),
+                            img,
+                            look: lookLabel,
+                            category: gCategory,
+                            mt: "",
+                          };
+                          const updated = [newItem, ...uploadedItems];
+                          localStorage.setItem("cruz_uploaded_items", JSON.stringify(updated));
+                          setUploadedItems(updated);
+                          setGTitle(""); setGLook(""); setGFile(null); setGImgUrl("");
+                          if (gFileRef.current) gFileRef.current.value = "";
+                          window.dispatchEvent(new Event("cruz_collections_updated"));
+                          showNotification("success", "Garment saved in browser storage (Server-side storage read-only on Vercel).");
                         } else {
                           setGTitle(""); setGLook(""); setGFile(null); setGImgUrl("");
                           if (gFileRef.current) gFileRef.current.value = "";
@@ -749,7 +868,32 @@ export default function AdminPage() {
                           showNotification("success", `Garment added to archive — visible to all visitors.`);
                         }
                       } catch {
-                        showNotification("error", "Network error.");
+                        // Fallback on network/CORS error
+                        try {
+                          if (gFile && gFile.size > 3 * 1024 * 1024) {
+                            showNotification("error", "File too large for local fallback (max 3MB).");
+                            return;
+                          }
+                          const img = gFile ? await fileToBase64(gFile) : gImgUrl.trim();
+                          const lookLabel = gLook.trim() || `Look ${Date.now().toString().slice(-2)}`;
+                          const newItem: UploadedItem = {
+                            id: `uploaded-${Date.now()}`,
+                            title: gTitle.trim(),
+                            img,
+                            look: lookLabel,
+                            category: gCategory,
+                            mt: "",
+                          };
+                          const updated = [newItem, ...uploadedItems];
+                          localStorage.setItem("cruz_uploaded_items", JSON.stringify(updated));
+                          setUploadedItems(updated);
+                          setGTitle(""); setGLook(""); setGFile(null); setGImgUrl("");
+                          if (gFileRef.current) gFileRef.current.value = "";
+                          window.dispatchEvent(new Event("cruz_collections_updated"));
+                          showNotification("success", "Garment saved in browser storage (Saved locally).");
+                        } catch {
+                          showNotification("error", "Network error. Upload failed.");
+                        }
                       } finally {
                         setGUploading(false);
                       }
@@ -880,11 +1024,15 @@ export default function AdminPage() {
                         .filter(g => gFilter === "all" || g.category === gFilter)
                         .map(g => (
                           <div key={g.id} className="group relative border border-cruzBorder/40 bg-white overflow-hidden">
-                            <div className="aspect-[3/4] w-full overflow-hidden bg-cruzGrey">
-                              <img
-                                src={g.img} alt={g.title}
-                                className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                              />
+                            <div className="aspect-[3/4] w-full overflow-hidden bg-cruzGrey flex items-center justify-center relative">
+                              {g.img ? (
+                                <img
+                                  src={g.img} alt={g.title}
+                                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                                />
+                              ) : (
+                                <span className="text-[9px] font-mono text-gray-300 uppercase tracking-widest">No Image</span>
+                              )}
                             </div>
                             <div className="p-3">
                               <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-cruzGold">{g.category}</p>
@@ -1045,15 +1193,24 @@ export default function AdminPage() {
                           <input
                             type="file"
                             accept="image/*"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                  setCustomImgUrl(reader.result as string);
-                                  showNotification("success", "Image file preloaded.");
-                                };
-                                reader.readAsDataURL(file);
+                              if (!file) return;
+                              showNotification("success", "Uploading file to server…");
+                              try {
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                const res = await fetch("/api/upload", { method: "POST", body: formData });
+                                if (res.ok) {
+                                  const { url } = await res.json();
+                                  setCustomImgUrl(url);
+                                  showNotification("success", "Image uploaded successfully.");
+                                } else {
+                                  const err = await res.json();
+                                  showNotification("error", err.error || "Upload failed.");
+                                }
+                              } catch {
+                                showNotification("error", "Network error. Upload failed.");
                               }
                             }}
                             className="text-[9px] file:bg-cruzBlack file:text-cruzBg file:border-0 file:px-3 file:py-1 file:uppercase file:text-[8px] file:tracking-widest cursor-pointer file:cursor-pointer"
@@ -1141,7 +1298,11 @@ export default function AdminPage() {
                       <div key={item.id} className={`flex items-center justify-between p-2.5 bg-cruzBg/30 border border-cruzBorder/40 hover:border-cruzBlack/20 transition-all ${isDeleted ? "opacity-60 bg-red-50/5" : ""}`}>
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-8 h-10 bg-white border border-cruzBorder/50 flex-shrink-0 flex items-center justify-center p-0.5 overflow-hidden">
-                            <img src={item.img} className="max-h-full max-w-full object-contain" />
+                            {item.img ? (
+                              <img src={item.img} className="max-h-full max-w-full object-contain" alt={item.title} />
+                            ) : (
+                              <span className="text-[6px] font-mono text-gray-300">—</span>
+                            )}
                           </div>
                           <div className="min-w-0">
                             <p className="text-[8px] font-mono text-gray-400 uppercase">
@@ -1176,10 +1337,14 @@ export default function AdminPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => removeImage(item.id)}
-                            className="px-2.5 py-1.5 text-[7px] font-mono uppercase tracking-widest border border-cruzBorder text-cruzBlack hover:bg-cruzGrey/30"
+                            onClick={() => {
+                              if (confirm(`Permanently delete "${item.title}" from the archive?`)) {
+                                removeImage(item.id);
+                              }
+                            }}
+                            className="px-2.5 py-1.5 text-[7px] font-mono uppercase tracking-widest border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all"
                           >
-                            Remove Image
+                            Delete
                           </button>
                         </div>
                       </div>
@@ -1242,8 +1407,12 @@ export default function AdminPage() {
                     {uploadedItems.map((item) => (
                       <div key={item.id} className="py-4 flex gap-4 items-center justify-between group">
                         <div className="flex gap-4 items-center truncate">
-                          <div className="w-12 h-16 bg-white border border-cruzBorder/50 flex-shrink-0 p-1 flex items-center justify-center">
-                            <img src={item.img} alt={item.title} className="w-full h-full object-contain" />
+                          <div className="w-12 h-16 bg-white border border-cruzBorder/50 flex-shrink-0 p-1 flex items-center justify-center overflow-hidden">
+                            {item.img ? (
+                              <img src={item.img} alt={item.title} className="w-full h-full object-contain" />
+                            ) : (
+                              <span className="text-[6px] font-mono text-gray-300">—</span>
+                            )}
                           </div>
                           <div className="truncate">
                             <h4 className="text-[10px] uppercase tracking-wider text-cruzBlack truncate">{item.title}</h4>
@@ -1306,7 +1475,7 @@ export default function AdminPage() {
                     <div>
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-[8px] font-mono uppercase tracking-[0.25em] text-gray-500">Homepage Hero Title text</span>
-                        {localStorage.getItem("cruz_config_heroTitle") !== null && (
+                        {heroTitle !== DEFAULTS.heroTitle && (
                           <span className="text-[7px] font-mono uppercase px-2 py-0.5 border border-cruzGold/30 text-cruzGold bg-cruzGold/5">Custom Override</span>
                         )}
                       </div>
@@ -1318,7 +1487,7 @@ export default function AdminPage() {
                     <div className="space-y-3">
                       <div className="flex gap-2">
                         <span className="text-[8px] font-mono uppercase tracking-widest text-gray-400 flex-1 flex items-center">Edit text:</span>
-                        {localStorage.getItem("cruz_config_heroTitle") !== null && (
+                        {heroTitle !== DEFAULTS.heroTitle && (
                           <button
                             type="button"
                             onClick={() => handleRemoveSingleConfig("heroTitle")}
@@ -1359,7 +1528,7 @@ export default function AdminPage() {
                     <div>
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-[8px] font-mono uppercase tracking-[0.25em] text-gray-500">Hero Media Type</span>
-                        {typeof window !== "undefined" && localStorage.getItem("cruz_config_heroMediaType") !== null && (
+                        {heroMediaType !== DEFAULTS.heroMediaType && (
                           <span className="text-[7px] font-mono uppercase px-2 py-0.5 border border-cruzGold/30 text-cruzGold bg-cruzGold/5">Custom Override</span>
                         )}
                       </div>
@@ -1376,7 +1545,7 @@ export default function AdminPage() {
                     <div className="space-y-3">
                       <div className="flex gap-2">
                         <span className="text-[8px] font-mono uppercase tracking-widest text-gray-400 flex-1 flex items-center">Choose Type:</span>
-                        {typeof window !== "undefined" && localStorage.getItem("cruz_config_heroMediaType") !== null && (
+                        {heroMediaType !== DEFAULTS.heroMediaType && (
                           <button
                             type="button"
                             onClick={() => handleRemoveSingleConfig("heroMediaType")}
@@ -1508,7 +1677,11 @@ export default function AdminPage() {
                       {/* Client details / look card split */}
                       <div className="flex gap-4 mb-6">
                         <div className="w-16 h-20 bg-cruzBg border border-cruzBorder/50 p-1 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                          <img src={inq.lookImg} alt={inq.lookTitle} className="max-h-full max-w-full object-contain" />
+                          {inq.lookImg ? (
+                            <img src={inq.lookImg} alt={inq.lookTitle} className="max-h-full max-w-full object-contain" />
+                          ) : (
+                            <span className="text-[8px] font-mono text-gray-300">—</span>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <span className="text-[7.5px] font-mono text-cruzGold uppercase tracking-widest">{inq.lookLabel}</span>

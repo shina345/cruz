@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://cruz-next.vercel.app
+
+# Sitemaps
+Sitemap: https://cruz-next.vercel.app/sitemap.xml

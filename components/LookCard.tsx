@@ -105,13 +105,19 @@ export default function LookCard({ item, aspectRatio = "aspect-[3/4]", variant =
         className={`group cursor-pointer fade-in-up ${item.mt || ""} relative`}
       >
         <div className={`overflow-hidden ${isCompact ? "mb-4" : "mb-5"} ${heightClass} relative`}>
-          <img
-            src={item.img}
-            className={`parallax-img w-full h-[125%] object-cover absolute top-0 left-0 transform filter grayscale group-hover:grayscale-0 transition-[filter] duration-1000 ${
-              item.objectTop ? "object-top" : ""
-            } ${item.outOfStock ? "brightness-[0.4]" : ""}`}
-            alt={item.title}
-          />
+          {item.img ? (
+            <img
+              src={item.img}
+              className={`parallax-img w-full h-[125%] object-cover absolute top-0 left-0 transform filter grayscale group-hover:grayscale-0 transition-[filter] duration-1000 ${
+                item.objectTop ? "object-top" : ""
+              } ${item.outOfStock ? "brightness-[0.4]" : ""}`}
+              alt={item.title}
+            />
+          ) : (
+            <div className="w-full h-full absolute inset-0 flex items-center justify-center bg-cruzGrey">
+              <span className="text-[9px] font-mono text-gray-300 uppercase tracking-widest">No Image</span>
+            </div>
+          )}
           {item.outOfStock && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
               <span className="text-[8.5px] font-mono tracking-[0.3em] uppercase text-cruzBg bg-cruzBlack/90 px-3 py-1.5 border border-cruzBorder/30">
@@ -175,11 +181,17 @@ export default function LookCard({ item, aspectRatio = "aspect-[3/4]", variant =
             <div className="flex-1 space-y-8 overflow-y-auto max-h-[calc(100vh-180px)] pr-2 scrollbar-thin">
               {/* Product Frame */}
               <div className="aspect-[4/5] bg-cruzGrey border border-cruzBorder/40 overflow-hidden relative">
-                <img 
-                  src={item.img} 
-                  alt={item.title} 
-                  className={`w-full h-full object-contain p-4 ${item.outOfStock ? "brightness-50 grayscale" : ""}`} 
-                />
+                {item.img ? (
+                  <img 
+                    src={item.img} 
+                    alt={item.title} 
+                    className={`w-full h-full object-contain p-4 ${item.outOfStock ? "brightness-50 grayscale" : ""}`} 
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-[9px] font-mono text-gray-300 uppercase tracking-widest">No Image</span>
+                  </div>
+                )}
                 {item.outOfStock && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                     <span className="text-[8.5px] font-mono tracking-[0.3em] uppercase text-cruzBg bg-cruzBlack border border-red-800 px-4 py-2">
