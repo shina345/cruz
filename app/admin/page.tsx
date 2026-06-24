@@ -828,23 +828,22 @@ export default function AdminPage() {
                     onSubmit={async (e) => {
                       e.preventDefault();
                       if (!gTitle.trim()) { showNotification("error", "Title is required."); return; }
-                      if (!gFile && !gImgUrl.trim()) { showNotification("error", "Please upload a file or paste an image URL."); return; }
+                      if (!gFile) { showNotification("error", "Please upload a file."); return; }
                       setGUploading(true);
                       try {
                         const fd = new FormData();
                         fd.append("title", gTitle.trim());
                         fd.append("category", gCategory);
                         fd.append("look", gLook.trim());
-                        if (gFile) fd.append("file", gFile);
-                        if (!gFile && gImgUrl.trim()) fd.append("imgUrl", gImgUrl.trim());
+                        fd.append("file", gFile);
                         const res = await fetch("/api/garments", { method: "POST", body: fd });
                         if (!res.ok) {
                           // Try local storage fallback (e.g., Vercel read-only filesystem)
-                          if (gFile && gFile.size > 3 * 1024 * 1024) {
+                          if (gFile.size > 3 * 1024 * 1024) {
                             showNotification("error", "File too large for local fallback (max 3MB).");
                             return;
                           }
-                          const img = gFile ? await fileToBase64(gFile) : gImgUrl.trim();
+                          const img = await fileToBase64(gFile);
                           const lookLabel = gLook.trim() || `Look ${Date.now().toString().slice(-2)}`;
                           const newItem: UploadedItem = {
                             id: `uploaded-${Date.now()}`,
@@ -870,11 +869,11 @@ export default function AdminPage() {
                       } catch {
                         // Fallback on network/CORS error
                         try {
-                          if (gFile && gFile.size > 3 * 1024 * 1024) {
+                          if (gFile.size > 3 * 1024 * 1024) {
                             showNotification("error", "File too large for local fallback (max 3MB).");
                             return;
                           }
-                          const img = gFile ? await fileToBase64(gFile) : gImgUrl.trim();
+                          const img = await fileToBase64(gFile);
                           const lookLabel = gLook.trim() || `Look ${Date.now().toString().slice(-2)}`;
                           const newItem: UploadedItem = {
                             id: `uploaded-${Date.now()}`,
@@ -956,20 +955,9 @@ export default function AdminPage() {
                         )}
                         <input
                           ref={gFileRef} type="file" accept="image/*" className="hidden"
-                          onChange={(e) => { const f = e.target.files?.[0]; if (f) { setGFile(f); setGImgUrl(""); } }}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) { setGFile(f); } }}
                         />
                       </label>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-px bg-cruzBorder/40" />
-                        <span className="text-[8px] font-mono uppercase text-gray-400">or paste URL</span>
-                        <div className="flex-1 h-px bg-cruzBorder/40" />
-                      </div>
-                      <input
-                        type="url" value={gImgUrl}
-                        onChange={(e) => { setGImgUrl(e.target.value); if (e.target.value) { setGFile(null); if (gFileRef.current) gFileRef.current.value = ""; } }}
-                        placeholder="https://..."
-                        className="w-full bg-cruzBg/50 border border-cruzBorder px-4 py-2.5 text-[11px] font-mono focus:outline-none focus:border-cruzBlack/60 transition-colors"
-                      />
                     </div>
 
                     <button
@@ -1155,7 +1143,7 @@ export default function AdminPage() {
                             imgSourceType === "url" ? "border-cruzBlack text-cruzBlack" : "border-transparent text-gray-400"
                           }`}
                         >
-                          Custom URL/File
+                          Custom Upload
                         </button>
                       </div>
                     </div>
@@ -1181,15 +1169,8 @@ export default function AdminPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <input
-                          type="text"
-                          value={customImgUrl}
-                          onChange={(e) => setCustomImgUrl(e.target.value)}
-                          placeholder="Paste image HTTPS URL..."
-                          className="w-full bg-cruzBg/50 border border-cruzBorder px-4 py-3 text-[11px] uppercase tracking-widest focus:outline-none focus:border-cruzBlack/60 transition-colors"
-                        />
                         <div className="flex items-center gap-4">
-                          <span className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-mono">Or Upload File:</span>
+                          <span className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-mono">Upload File:</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -1216,6 +1197,11 @@ export default function AdminPage() {
                             className="text-[9px] file:bg-cruzBlack file:text-cruzBg file:border-0 file:px-3 file:py-1 file:uppercase file:text-[8px] file:tracking-widest cursor-pointer file:cursor-pointer"
                           />
                         </div>
+                        {customImgUrl && (
+                          <div className="text-[9px] font-mono text-cruzGold">
+                            File uploaded: {customImgUrl}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
